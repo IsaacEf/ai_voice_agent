@@ -1,6 +1,16 @@
 import sounddevice as sd
 import soundfile as sf
 import speech_recognition as sr
+import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  
+API_KEY = os.getenv("BLAND_API_KEY")
+if not API_KEY:
+    raise ValueError("No API key set for BLAND_API_KEY environment variable")
+
+HEADERS = {'Authorization': f'Bearer {API_KEY}'}
 
 def record_audio(duration=5, fs=16000):
     
@@ -27,17 +37,47 @@ def transcribe_audio(filename):
         print(f"Could not request results from Google Speech Recognition service; {e}")
     return ""
 
+def call_conversational_endpoint(transcribed_text):
+    #Sends the transcribed text to Bland AI's conversation endpoint and returns the response.
+    
+    url = "https://api.bland.ai/v1/calls" 
+    # Construct the payload as required by the API
+    payload = {
+        "message": transcribed_text,
+        "phone_number": '929-600-3028',       # Required parameter
+        "task": "TEST TASK",                  # Required parameter
+        "objective": "conversation"  
+    }
+    
+    response = requests.post(url, headers=HEADERS, json=payload)
+    if response.status_code == 200:
+        data = response.json()
+        # Adjust key names as per actual response structure
+        ai_response = data.get('response', '')
+        return ai_response
+    else:
+        print("Error calling conversational endpoint:", response.text)
+        return ""
+
 def main():
     # Record audio for 5 seconds
     recording, fs = record_audio(duration=5)
     
-    # Save the recorded audio to a file for verification
+    # Save the recorded audio to a file
     output_filename = "test_recording.wav"
     sf.write(output_filename, recording, fs)
     print(f"Audio has been saved to {output_filename}")
     
     # Transcribe the recorded audio
-    transcribe_audio(output_filename)
+    transcription = transcribe_audio(output_filename)
+    
+    # Send transcription to the AI's conversational endpoint
+    if transcription:
+        ai_response = call_conversational_endpoint(transcription)
+        print("AI Response:", ai_response)
+        # Optionally: Convert the AI response to speech here using a TTS endpoint or library.
+    else:
+        print("No transcription available, skipping API call.")
 
 if __name__ == "__main__":
     main()
