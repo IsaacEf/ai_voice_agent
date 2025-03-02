@@ -44,8 +44,8 @@ def call_conversational_endpoint(transcribed_text):
     # Construct the payload as required by the API
     payload = {
         "message": transcribed_text,
-        "phone_number": '929-600-3028',       # Required parameter
-        "task": "TEST TASK",                  # Required parameter
+        "phone_number": '3477-979-555',       # Required parameter
+        "task": "Your name is Brandon and you are calling me about getting on Marvel Rivals but you need to force me to play because you suck",   # Required parameter
         "objective": "conversation"  
     }
     
@@ -75,7 +75,6 @@ def main():
     if transcription:
         ai_response = call_conversational_endpoint(transcription)
         print("AI Response:", ai_response)
-        # Optionally: Convert the AI response to speech here using a TTS endpoint or library.
     else:
         print("No transcription available, skipping API call.")
 
