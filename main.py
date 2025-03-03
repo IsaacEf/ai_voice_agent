@@ -8,11 +8,12 @@ from dotenv import load_dotenv
 
 # Load API key from environment variables
 load_dotenv()  
+WEBHOOK_URL = "https://webhook.site/2d21ec43-d6e3-4696-9054-baac4dbf8963"
 API_KEY = os.getenv("BLAND_API_KEY")
 if not API_KEY:
     raise ValueError("No API key set for BLAND_API_KEY environment variable")
 
-HEADERS = {'Authorization': f'Bearer {API_KEY}'}
+HEADERS = {'authorization': API_KEY}
 
 def record_audio(duration=5, fs=16000):
     print("Recording...")
@@ -41,7 +42,8 @@ def call_conversational_endpoint(transcribed_text):
         "message": transcribed_text,
         "phone_number": "+19296003028",
         "task": "You are a store clerk at Target",
-        "objective": "conversation"
+        "objective": "conversation",
+        "record": True  
     }
     print("Sending payload to trigger call:", payload)
     response = requests.post(url, headers=HEADERS, json=payload)
@@ -60,7 +62,6 @@ def call_conversational_endpoint(transcribed_text):
 
 def create_postcall_webhook(call_id, webhook_url):
     url = "https://api.bland.ai/v1/postcall/webhooks/create"
-
     payload = {
          "call_ids": [call_id],
          "webhook_url": webhook_url
@@ -76,25 +77,29 @@ def create_postcall_webhook(call_id, webhook_url):
         print(f"Webhook creation failed: {response.text}")
         return False
 
-
 def poll_postcall_webhook(call_id, timeout=300, interval=5, required_fields=None):
-    # Endpoint to poll for webhook data
     url = f"https://api.bland.ai/v1/postcall/webhooks/{call_id}"
     params = {"call_id": call_id}
     start_time = time.time()
     while time.time() - start_time < timeout:
         response = requests.get(url, headers=HEADERS, params=params)
         if response.status_code == 200:
-            data = response.json()
-            if required_fields:
-                if all(field in data for field in required_fields):
+            json_response = response.json()
+            data = json_response.get("data")
+            if data is None:
+                print("No webhook data returned yet. Waiting...")
+            else:
+                if required_fields:
+                    if all(field in data for field in required_fields):
+                        print("Post-call webhook data received.")
+                        return data
+                elif (data.get("payload") or data.get("metadata") or 
+                      data.get("transcripts") or data.get("concatenated_transcript") or 
+                      data.get("summary")):
                     print("Post-call webhook data received.")
                     return data
-            elif data.get("payload") or data.get("metadata"):
-                print("Post-call webhook data received.")
-                return data
-            else:
-                print("No webhook data yet. Waiting...")
+                else:
+                    print("Webhook data is empty. Waiting...")
         elif response.status_code == 404:
             print("Webhook not found for this call ID.")
             return None
@@ -104,14 +109,17 @@ def poll_postcall_webhook(call_id, timeout=300, interval=5, required_fields=None
     print(f"Polling timed out after {timeout} seconds.")
     return None
 
+
 def extract_webhook_details(webhook_data):
-    # Extract the desired fields from the webhook data, defaulting to "N/A" if not found.
     details = {
          "call_id": webhook_data.get("call_id", "N/A"),
          "payload": webhook_data.get("payload", "N/A"),
          "url": webhook_data.get("url", "N/A"),
          "user_id": webhook_data.get("user_id", "N/A"),
-         "created_at": webhook_data.get("created_at", "N/A")
+         "created_at": webhook_data.get("created_at", "N/A"),
+         "transcripts": webhook_data.get("transcripts", "N/A"),
+         "concatenated_transcript": webhook_data.get("concatenated_transcript", "N/A"),
+         "summary": webhook_data.get("summary", "N/A")
     }
     return details
 
@@ -143,17 +151,15 @@ def main():
         print("Call was not queued successfully. Exiting.")
         return
 
-    # Wait a few seconds before creating the webhook, allowing the call to process
-    delay_seconds = 5
-    print(f"Waiting for {delay_seconds} seconds before creating post-call webhook...")
+    delay_seconds = 10
+    print(f"Waiting for {delay_seconds} seconds before processing webhook data...")
     time.sleep(delay_seconds)
     
-    # Set webhook URL 
-    webhook_url = "https://webhook.site/2d21ec43-d6e3-4696-9054-baac4dbf8963"
-    if not create_postcall_webhook(call_id, webhook_url):
-        print("Failed to create post-call webhook. Continuing without explicit webhook creation.")
+    # Create the post-call webhook
+    if not create_postcall_webhook(call_id, WEBHOOK_URL):
+        print("Webhook creation failed. Proceeding to poll for webhook data.")
     
-    # Poll until the call is complete and webhook data is available
+    # Poll for webhook data
     webhook_data = poll_postcall_webhook(call_id)
     if webhook_data:
         details = extract_webhook_details(webhook_data)
@@ -163,7 +169,6 @@ def main():
     else:
         conversation_log.append("No post-call webhook data received within the timeout period.")
     
-    # Save the conversation log to a text file
     save_conversation_log(conversation_log)
 
 if __name__ == "__main__":
