@@ -157,7 +157,7 @@ def main():
     time.sleep(delay_seconds)
     
     # Attempt to create the post-call webhook.
-    # If creation fails (e.g. because a webhook was already sent), just log and proceed.
+    # If creation fails, log and proceed.
     if not create_postcall_webhook(call_id, WEBHOOK_URL):
         print("Webhook creation failed. Proceeding to poll for webhook data.")
     
@@ -168,7 +168,7 @@ def main():
         conversation_log.append("Webhook details:")
         for key, value in details.items():
             conversation_log.append(f"{key}: {value}")
-        # Combine your local transcription with the agent's transcript from the webhook.
+        # Combine local transcription with the agent's transcript from the webhook.
         agent_transcript = webhook_data.get("concatenated_transcript", "").strip()
         combined_transcript = f"User: {user_text}\nAgent: {agent_transcript}"
         conversation_log.append("Combined Transcript:")
