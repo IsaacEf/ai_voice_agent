@@ -41,7 +41,7 @@ def call_conversational_endpoint(transcribed_text):
     payload = {
         "message": transcribed_text,
         "phone_number": "+19296003028",
-        "task": "You are a store clerk at Target",
+        "task": "Youre name is Steve and you are helping me find items in target",
         "objective": "conversation",
         "record": True  
     }
@@ -111,6 +111,7 @@ def poll_postcall_webhook(call_id, timeout=300, interval=5, required_fields=None
 
 
 def extract_webhook_details(webhook_data):
+    # Extract agent's transcript and other details
     details = {
          "call_id": webhook_data.get("call_id", "N/A"),
          "payload": webhook_data.get("payload", "N/A"),
@@ -123,6 +124,7 @@ def extract_webhook_details(webhook_data):
     }
     return details
 
+
 def save_conversation_log(conversation_log, filename="conversation_log.txt"):
     with open(filename, "w") as f:
         for line in conversation_log:
@@ -132,30 +134,30 @@ def save_conversation_log(conversation_log, filename="conversation_log.txt"):
 def main():
     conversation_log = []  # List to store conversation details
     
-    # Record a single turn of audio
+    # Record and save audio
     recording, fs = record_audio(duration=5)
     output_filename = "test_recording.wav"
     sf.write(output_filename, recording, fs)
     print(f"Audio has been saved to {output_filename}")
     
-    # Transcribe the recorded audio
     user_text = transcribe_audio(output_filename)
     if not user_text:
         print("No valid transcription. Exiting.")
         return
     conversation_log.append(f"User: {user_text}")
     
-    # Queue the call using the user's transcription
     call_id = call_conversational_endpoint(user_text)
     if not call_id:
         print("Call was not queued successfully. Exiting.")
         return
 
-    delay_seconds = 10
+    # Wait for the call to process; adjust delay as needed
+    delay_seconds = 120
     print(f"Waiting for {delay_seconds} seconds before processing webhook data...")
     time.sleep(delay_seconds)
     
-    # Create the post-call webhook
+    # Attempt to create the post-call webhook.
+    # If creation fails (e.g. because a webhook was already sent), just log and proceed.
     if not create_postcall_webhook(call_id, WEBHOOK_URL):
         print("Webhook creation failed. Proceeding to poll for webhook data.")
     
@@ -166,9 +168,15 @@ def main():
         conversation_log.append("Webhook details:")
         for key, value in details.items():
             conversation_log.append(f"{key}: {value}")
+        # Combine your local transcription with the agent's transcript from the webhook.
+        agent_transcript = webhook_data.get("concatenated_transcript", "").strip()
+        combined_transcript = f"User: {user_text}\nAgent: {agent_transcript}"
+        conversation_log.append("Combined Transcript:")
+        conversation_log.append(combined_transcript)
     else:
         conversation_log.append("No post-call webhook data received within the timeout period.")
     
+    # Save the complete conversation log
     save_conversation_log(conversation_log)
 
 if __name__ == "__main__":
